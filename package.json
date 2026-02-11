@@ -1,0 +1,21 @@
+{
+  "name": "lazyai",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file=.env src/index.ts",
+    "typecheck": "tsc",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "packageManager": "pnpm@10.13.1",
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4.6.0"
+  }
+}
