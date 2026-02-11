@@ -11,40 +11,54 @@ sequenceDiagram
     actor User
     participant Slack
     participant lazyai
+    participant FS as Work Directory
     participant Claude as Claude Code
     participant GitHub
 
+    Note over User,GitHub: Phase 1: Issue Planning
+
     User->>Slack: @lazyai issue <request>
     Slack->>lazyai: app_mention event
-    lazyai->>lazyai: git clone (--depth 1)
-    lazyai->>Claude: Investigate codebase & create issue
+    lazyai->>FS: Create work-{timestamp}
+    lazyai->>FS: git clone --depth 1
+    lazyai->>Claude: spawn (new session)<br/>allowedTools: Bash(gh:*), Read, Write, Glob, Grep
     Claude->>GitHub: Create issue with plan
     Claude->>GitHub: Comment questions (if any)
+    Claude->>FS: Write .issue-number
+    lazyai->>FS: Read .issue-number
     lazyai->>Slack: issue #N created (work-xxx)
+
+    Note over User,GitHub: Phase 2: Plan Refinement (repeat as needed)
 
     loop Until plan is finalized
         User->>GitHub: Answer questions on issue
         User->>Slack: @lazyai comment <work-id>
         Slack->>lazyai: app_mention event
-        lazyai->>Claude: Read comments & update plan (--continue)
+        lazyai->>Claude: spawn (--continue, same session)<br/>allowedTools: Bash(gh:*), Read, Write, Glob, Grep
         Claude->>GitHub: Update issue description
         Claude->>GitHub: Comment follow-up questions (if any)
         lazyai->>Slack: issue #N updated (work-xxx)
     end
 
+    Note over User,GitHub: Phase 3: Implementation
+
     User->>Slack: @lazyai pr <work-id>
     Slack->>lazyai: app_mention event
-    lazyai->>lazyai: Run SETUP_COMMAND
-    lazyai->>Claude: Implement based on issue plan
-    Claude->>GitHub: Create branch, commit, push & open PR
+    lazyai->>FS: Run SETUP_COMMAND in work dir
+    lazyai->>Claude: spawn (new session)<br/>allowedTools: Bash(git:*,gh:*), Read, Write, Edit, Glob, Grep<br/>+ CLAUDE_EXTRA_TOOLS (e.g. Bash(pnpm:*))
+    Claude->>GitHub: Create branch, implement, push & open PR
+    Claude->>FS: Write .pr-number
+    lazyai->>FS: Read .pr-number
     lazyai->>Slack: PR #N created (work-xxx)
+
+    Note over User,GitHub: Phase 4: Review & Fix (repeat as needed)
 
     loop Until PR is approved
         User->>GitHub: Review PR & leave comments
         User->>Slack: @lazyai pr_comment <work-id>
         Slack->>lazyai: app_mention event
-        lazyai->>Claude: Read review feedback & fix (--continue)
-        Claude->>GitHub: Commit & push fixes
+        lazyai->>Claude: spawn (--continue, same session)<br/>allowedTools: Bash(git:*,gh:*), Read, Write, Edit, Glob, Grep<br/>+ CLAUDE_EXTRA_TOOLS
+        Claude->>GitHub: Fix code, commit & push
         lazyai->>Slack: PR #N updated (work-xxx)
     end
 ```
