@@ -32,7 +32,7 @@ sequenceDiagram
 
     loop Until plan is finalized
         User->>GitHub: Answer questions on issue
-        User->>Slack: @lazyai comment <work-id>
+        User->>Slack: @lazyai comment <issue-number>
         Slack->>lazyai: app_mention event
         lazyai->>Claude: spawn (--continue, same session)<br/>allowedTools: Bash(gh:*), Read, Write, Glob, Grep
         Claude->>GitHub: Update issue description
@@ -42,7 +42,7 @@ sequenceDiagram
 
     Note over User,GitHub: Phase 3: Implementation
 
-    User->>Slack: @lazyai pr <work-id>
+    User->>Slack: @lazyai pr <issue-number>
     Slack->>lazyai: app_mention event
     lazyai->>FS: Run SETUP_COMMAND in work dir
     lazyai->>Claude: spawn (new session)<br/>allowedTools: Bash(git:*,gh:*), Read, Write, Edit, Glob, Grep<br/>+ CLAUDE_EXTRA_TOOLS (e.g. Bash(pnpm:*))
@@ -55,7 +55,7 @@ sequenceDiagram
 
     loop Until PR is approved
         User->>GitHub: Review PR & leave comments
-        User->>Slack: @lazyai pr_comment <work-id>
+        User->>Slack: @lazyai pr_comment <pr-number>
         Slack->>lazyai: app_mention event
         lazyai->>Claude: spawn (--continue, same session)<br/>allowedTools: Bash(git:*,gh:*), Read, Write, Edit, Glob, Grep<br/>+ CLAUDE_EXTRA_TOOLS
         Claude->>GitHub: Fix code, commit & push
@@ -68,9 +68,9 @@ sequenceDiagram
 | Command | Body | Description |
 |---------|------|-------------|
 | `issue` | Request text | Clone repo, investigate codebase, create a GitHub issue with implementation plan |
-| `comment` | Work ID | Read issue comments (user answers), update the plan. Uses `--continue` |
-| `pr` | Work ID | Implement the plan, create a branch and open a PR |
-| `pr_comment` | Work ID | Read PR review comments, fix code and push. Uses `--continue` |
+| `comment` | Issue number or Work ID | Read issue comments (user answers), update the plan. Uses `--continue` |
+| `pr` | Issue number or Work ID | Implement the plan, create a branch and open a PR |
+| `pr_comment` | PR number or Work ID | Read PR review comments, fix code and push. Uses `--continue` |
 
 ## Prerequisites
 

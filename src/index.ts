@@ -1,10 +1,33 @@
 import { App } from '@slack/bolt'
 import { spawn, exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 
 const execAsync = promisify(exec)
+
+async function resolveWorkId(
+  identifier: string,
+  file: '.issue-number' | '.pr-number',
+): Promise<string> {
+  if (identifier.startsWith('work-')) return identifier
+
+  const baseDir = process.env.WORK_DIR!
+  const entries = await readdir(baseDir)
+  // Sort descending so the latest work dir wins
+  const sorted = entries.filter((e) => e.startsWith('work-')).sort().reverse()
+
+  for (const entry of sorted) {
+    try {
+      const value = (
+        await readFile(path.join(baseDir, entry, file), 'utf-8')
+      ).trim()
+      if (value === identifier) return entry
+    } catch {}
+  }
+
+  throw new Error(`work directory not found for ${file}: ${identifier}`)
+}
 
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
@@ -31,33 +54,48 @@ app.event('app_mention', async ({ event, say }) => {
       break
     }
     case 'comment': {
-      const workId = body.trim()
-      if (!workId) {
-        await say(`<@${user}> work directory ID is required`)
+      const id = body.trim()
+      if (!id) {
+        await say(`<@${user}> issue number or work-id is required`)
         break
       }
-      await say(`<@${user}> resuming: ${workId}`)
-      handleComment(workId, user, say as (text: string) => Promise<unknown>)
+      try {
+        const workId = await resolveWorkId(id, '.issue-number')
+        await say(`<@${user}> resuming: ${workId}`)
+        handleComment(workId, user, say as (text: string) => Promise<unknown>)
+      } catch {
+        await say(`<@${user}> work directory not found for: ${id}`)
+      }
       break
     }
     case 'pr_comment': {
-      const workId = body.trim()
-      if (!workId) {
-        await say(`<@${user}> work directory ID is required`)
+      const id = body.trim()
+      if (!id) {
+        await say(`<@${user}> PR number or work-id is required`)
         break
       }
-      await say(`<@${user}> reviewing PR feedback: ${workId}`)
-      handlePrComment(workId, user, say as (text: string) => Promise<unknown>)
+      try {
+        const workId = await resolveWorkId(id, '.pr-number')
+        await say(`<@${user}> reviewing PR feedback: ${workId}`)
+        handlePrComment(workId, user, say as (text: string) => Promise<unknown>)
+      } catch {
+        await say(`<@${user}> work directory not found for: ${id}`)
+      }
       break
     }
     case 'pr': {
-      const workId = body.trim()
-      if (!workId) {
-        await say(`<@${user}> work directory ID is required`)
+      const id = body.trim()
+      if (!id) {
+        await say(`<@${user}> issue number or work-id is required`)
         break
       }
-      await say(`<@${user}> starting implementation: ${workId}`)
-      handlePr(workId, user, say as (text: string) => Promise<unknown>)
+      try {
+        const workId = await resolveWorkId(id, '.issue-number')
+        await say(`<@${user}> starting implementation: ${workId}`)
+        handlePr(workId, user, say as (text: string) => Promise<unknown>)
+      } catch {
+        await say(`<@${user}> work directory not found for: ${id}`)
+      }
       break
     }
     default:
