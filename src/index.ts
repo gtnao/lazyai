@@ -83,6 +83,33 @@ app.event('app_mention', async ({ event, say }) => {
       }
       break
     }
+    case 'ask': {
+      const question = body.trim()
+      if (!question) {
+        await say(`<@${user}> question is required`)
+        break
+      }
+      await say(`<@${user}> thinking: ${question}`)
+      handleAsk(question, user, say as (text: string) => Promise<unknown>)
+      break
+    }
+    case 'ask_follow': {
+      const parts = body.trim().split(/\s+/)
+      const workId = parts[0]
+      const question = parts.slice(1).join(' ')
+      if (!workId || !question) {
+        await say(`<@${user}> usage: ask_follow <work-id> <question>`)
+        break
+      }
+      await say(`<@${user}> following up: ${question} (${workId})`)
+      handleAskFollow(
+        workId,
+        question,
+        user,
+        say as (text: string) => Promise<unknown>,
+      )
+      break
+    }
     case 'pr': {
       const id = body.trim()
       if (!id) {
@@ -367,6 +394,120 @@ async function handlePrComment(
         await say(
           `<@${user}> PR #${prNumber} の修正が完了しました (${workId})`,
         )
+      } else {
+        await say(
+          `<@${user}> 処理中にエラーが発生しました (exit code: ${code})`,
+        )
+      }
+    })
+
+    child.on('error', async (error) => {
+      await say(`<@${user}> 処理中にエラーが発生しました: ${error.message}`)
+    })
+  } catch (error) {
+    await say(`<@${user}> 処理中にエラーが発生しました: ${error}`)
+  }
+}
+
+async function handleAsk(
+  question: string,
+  user: string,
+  say: (text: string) => Promise<unknown>,
+) {
+  const repo = process.env.GITHUB_REPO!
+  const baseDir = process.env.WORK_DIR!
+  const workId = `work-${Date.now()}`
+  const workDir = path.join(baseDir, workId)
+  const responseFile = path.join(workDir, '.response')
+
+  try {
+    await mkdir(baseDir, { recursive: true })
+
+    await execAsync(
+      `git clone --depth 1 https://github.com/${repo}.git ${workDir}`,
+    )
+
+    const prompt = [
+      `以下の質問について、コードベースを必要に応じて調査した上で回答してください。\n`,
+      `回答は ${responseFile} にファイルとして書き出してください。\n\n`,
+      `質問: ${question}`,
+    ].join('')
+
+    const child = spawn(
+      process.env.CLAUDE_PATH!,
+      ['-p', prompt, '--allowedTools', 'Read', 'Write', 'Glob', 'Grep'],
+      {
+        cwd: workDir,
+        stdio: 'ignore',
+      },
+    )
+
+    child.on('close', async (code) => {
+      if (code === 0) {
+        try {
+          const response = (await readFile(responseFile, 'utf-8')).trim()
+          await say(`<@${user}> (${workId})\n${response}`)
+        } catch {
+          await say(`<@${user}> 回答の取得に失敗しました (${workId})`)
+        }
+      } else {
+        await say(
+          `<@${user}> 処理中にエラーが発生しました (exit code: ${code})`,
+        )
+      }
+    })
+
+    child.on('error', async (error) => {
+      await say(`<@${user}> 処理中にエラーが発生しました: ${error.message}`)
+    })
+  } catch (error) {
+    await say(`<@${user}> 処理中にエラーが発生しました: ${error}`)
+  }
+}
+
+async function handleAskFollow(
+  workId: string,
+  question: string,
+  user: string,
+  say: (text: string) => Promise<unknown>,
+) {
+  const baseDir = process.env.WORK_DIR!
+  const workDir = path.join(baseDir, workId)
+  const responseFile = path.join(workDir, '.response')
+
+  try {
+    const prompt = [
+      `以下の追加の質問について、コードベースを必要に応じて調査した上で回答してください。\n`,
+      `回答は ${responseFile} にファイルとして上書きで書き出してください。\n\n`,
+      `質問: ${question}`,
+    ].join('')
+
+    const child = spawn(
+      process.env.CLAUDE_PATH!,
+      [
+        '-p',
+        prompt,
+        '--continue',
+        '--allowedTools',
+        'Read',
+        'Write',
+        'Glob',
+        'Grep',
+      ],
+      {
+        cwd: workDir,
+        stdio: 'ignore',
+      },
+    )
+
+    child.on('close', async (code) => {
+      if (code === 0) {
+        try {
+          const response = (await readFile(responseFile, 'utf-8')).trim()
+          await say(`<@${user}> (${workId})\n${response}`)
+        } catch {
+          await say(`<@${user}> 回答の取得に失敗しました (${workId})`)
+        }
       } else {
         await say(
           `<@${user}> 処理中にエラーが発生しました (exit code: ${code})`,

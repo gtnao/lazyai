@@ -61,6 +61,26 @@ sequenceDiagram
         Claude->>GitHub: Fix code, commit & push
         lazyai->>Slack: PR #N updated (work-xxx)
     end
+
+    Note over User,FS: Ask Mode (independent of issue/PR workflow)
+
+    User->>Slack: @lazyai ask <question>
+    Slack->>lazyai: app_mention event
+    lazyai->>FS: Create work-{timestamp}
+    lazyai->>FS: git clone --depth 1
+    lazyai->>Claude: spawn (new session)<br/>allowedTools: Read, Write, Glob, Grep
+    Claude->>FS: Write .response
+    lazyai->>FS: Read .response
+    lazyai->>Slack: Answer + work-id
+
+    loop Follow-up questions
+        User->>Slack: @lazyai ask_follow <work-id> <question>
+        Slack->>lazyai: app_mention event
+        lazyai->>Claude: spawn (--continue, same session)<br/>allowedTools: Read, Write, Glob, Grep
+        Claude->>FS: Write .response
+        lazyai->>FS: Read .response
+        lazyai->>Slack: Answer + work-id
+    end
 ```
 
 ## Commands
@@ -71,6 +91,8 @@ sequenceDiagram
 | `comment` | Issue number or Work ID | Read issue comments (user answers), update the plan. Uses `--continue` |
 | `pr` | Issue number or Work ID | Implement the plan, create a branch and open a PR |
 | `pr_comment` | PR number or Work ID | Read PR review comments, fix code and push. Uses `--continue` |
+| `ask` | Question text | Clone repo, investigate codebase, answer the question via Slack |
+| `ask_follow` | `<work-id> <question>` | Follow-up question in the same context. Uses `--continue` |
 
 ## Prerequisites
 
